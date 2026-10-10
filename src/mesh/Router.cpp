@@ -12,6 +12,9 @@
 #include "mesh-pb-constants.h"
 #include "meshUtils.h"
 #include "modules/RoutingModule.h"
+#ifdef UART_BRIDGE_FULL
+#include "modules/UartBridgeModule.h"
+#endif
 #if !MESHTASTIC_EXCLUDE_MQTT
 #include "mqtt/MQTT.h"
 #endif
@@ -337,6 +340,12 @@ ErrorCode Router::send(meshtastic_MeshPacket *p)
     // Up until this point we might have been using 0 for the from address (if it started with the phone), but when we send over
     // the lora we need to make sure we have replaced it with our local address
     p->from = getFrom(p);
+#ifdef UART_BRIDGE_FULL
+    // Duplicate direct ACKs need a return path to nodes behind the UART link.
+    if (uartBridgeModule && isFromUs(p) && !p->hop_limit && p->which_payload_variant == meshtastic_MeshPacket_decoded_tag &&
+        p->decoded.portnum == meshtastic_PortNum_ROUTING_APP && p->decoded.request_id && uartBridgeModule->isRemoteNode(p->to))
+        p->hop_limit = Default::getConfiguredOrDefaultHopLimit(config.lora.hop_limit);
+#endif
 
     p->relay_node = nodeDB->getLastByteOfNodeNum(getNodeNum()); // set the relayer to us
     // If we are the original transmitter, set the hop limit with which we start
@@ -382,8 +391,17 @@ ErrorCode Router::send(meshtastic_MeshPacket *p)
             mqtt->onSend(*p, *p_decoded, chIndex);
         }
 #endif
+#ifdef UART_BRIDGE_FULL
+        if (uartBridgeModule && isFromUs(p))
+            uartBridgeModule->forwardFull(p->pki_encrypted ? *p : *p_decoded);
+#endif
         packetPool.release(p_decoded);
     }
+#ifdef UART_BRIDGE_FULL
+    else if (uartBridgeModule && isFromUs(p)) {
+        uartBridgeModule->forwardFull(*p);
+    }
+#endif
 
 #if HAS_UDP_MULTICAST
     if (udpHandler && config.network.enabled_protocols & meshtastic_Config_NetworkConfig_ProtocolFlags_UDP_BROADCAST) {
@@ -787,6 +805,12 @@ void Router::handleReceived(meshtastic_MeshPacket *p, RxSource src)
     // If this could be a spoofed packet, don't let the modules see it.
     if (!skipHandle) {
         MeshModule::callModules(*p, src);
+#ifdef UART_BRIDGE_FULL
+        if (isBridgeIngress(p))
+            forwardBridgeIngress(p);
+        else if (uartBridgeModule && src == RX_SRC_RADIO)
+            uartBridgeModule->forwardFull(*p);
+#endif
 
 #if !MESHTASTIC_EXCLUDE_MQTT
         if (p_encrypted == nullptr) {
@@ -872,6 +896,18 @@ void Router::perhapsHandleReceived(meshtastic_MeshPacket *p)
     }
 
     if (shouldFilterReceived(p)) {
+#ifdef UART_BRIDGE_FULL
+        if (isBridgeIngress(p)) {
+            forwardBridgeIngress(p);
+        } else if (uartBridgeModule && p->transport_mechanism == meshtastic_MeshPacket_TransportMechanism_TRANSPORT_LORA) {
+            auto copy = packetPool.allocCopy(*p);
+            if (copy) {
+                if (perhapsDecode(copy) != DECODE_FATAL)
+                    uartBridgeModule->forwardFull(*copy);
+                packetPool.release(copy);
+            }
+        }
+#endif
         LOG_DEBUG("Incoming msg was filtered from 0x%x", p->from);
         packetPool.release(p);
         return;
@@ -882,3 +918,25 @@ void Router::perhapsHandleReceived(meshtastic_MeshPacket *p)
     handleReceived(p);
     packetPool.release(p);
 }
+
+#ifdef UART_BRIDGE_FULL
+void Router::receiveFromBridge(meshtastic_MeshPacket *p)
+{
+    const auto previous = bridgeIngress;
+    bridgeIngress = p;
+    perhapsHandleReceived(p);
+    bridgeIngress = previous;
+}
+
+void Router::forwardBridgeIngress(const meshtastic_MeshPacket *p)
+{
+    if (isToUs(p) || isFromUs(p) || findInTxQueue(p->from, p->id))
+        return;
+    auto copy = packetPool.allocCopy(*p);
+    if (copy) {
+        copy->next_hop = NO_NEXT_HOP_PREFERENCE;
+        copy->relay_node = 0;
+        send(copy);
+    }
+}
+#endif

@@ -126,6 +126,10 @@ void NextHopRouter::sniffReceived(const meshtastic_MeshPacket *p, const meshtast
 /* Check if we should be rebroadcasting this packet if so, do so. */
 bool NextHopRouter::perhapsRebroadcast(const meshtastic_MeshPacket *p)
 {
+#ifdef UART_BRIDGE_FULL
+    if (isBridgeIngress(p))
+        return false;
+#endif
     if (!isToUs(p) && !isFromUs(p) && p->hop_limit > 0) {
         if (p->id != 0) {
             if (isRebroadcaster()) {

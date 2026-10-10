@@ -29,6 +29,10 @@ class Router : protected concurrency::OSThread, protected PacketHistory
      *
      */
     Router();
+#ifdef UART_BRIDGE_FULL
+    void receiveFromBridge(meshtastic_MeshPacket *p);
+    bool isBridgeIngress(const meshtastic_MeshPacket *p) const { return bridgeIngress == p; }
+#endif
 
     /**
      * Currently we only allow one interface, that may change in the future
@@ -130,6 +134,10 @@ class Router : protected concurrency::OSThread, protected PacketHistory
                     bool ackWantsAck = false);
 
   private:
+#ifdef UART_BRIDGE_FULL
+    const meshtastic_MeshPacket *bridgeIngress = nullptr;
+    void forwardBridgeIngress(const meshtastic_MeshPacket *p);
+#endif
     /**
      * Called from loop()
      * Handle any packet that is received by an interface on this node.
