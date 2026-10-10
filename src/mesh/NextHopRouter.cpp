@@ -242,6 +242,10 @@ void NextHopRouter::sniffReceived(const meshtastic_MeshPacket *p, const meshtast
 /* Check if we should be rebroadcasting this packet if so, do so. */
 bool NextHopRouter::perhapsRebroadcast(const meshtastic_MeshPacket *p)
 {
+#ifdef MESHTASTIC_UART_BRIDGE
+    if (isBridgeIngress(p))
+        return false;
+#endif
 #if USERPREFS_BLOCK_POSITION_ON_EVENT_CHANNEL
     // Never relay coordinate-bearing packets on the event ("everyone") channel.
     // Closes the reliable-retransmit-dupe path that runs before handleReceived().

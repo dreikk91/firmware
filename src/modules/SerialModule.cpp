@@ -53,6 +53,15 @@
 // Outside the architecture guard on purpose: config validation, not serial I/O. See SerialModule.h.
 bool serialConfigIsValid(const meshtastic_ModuleConfig_SerialConfig &config)
 {
+#if defined(MESHTASTIC_UART_BRIDGE) && defined(ARCH_ESP32)
+    if (config.enabled &&
+        (config.override_console_serial_port || !config.rxd || !config.txd || config.rxd == config.txd ||
+         config.rxd == UART_BRIDGE_RX || config.rxd == UART_BRIDGE_TX || config.txd == UART_BRIDGE_RX ||
+         config.txd == UART_BRIDGE_TX || config.rxd == 1 || config.rxd == 3 || config.txd == 1 || config.txd == 3)) {
+        LOG_ERROR("Serial Module requires separate RX/TX pins; bridge and console pins are reserved");
+        return false;
+    }
+#endif
     if (config.override_console_serial_port && !IS_ONE_OF(config.mode, meshtastic_ModuleConfig_SerialConfig_Serial_Mode_NMEA,
                                                           meshtastic_ModuleConfig_SerialConfig_Serial_Mode_CALTOPO,
                                                           meshtastic_ModuleConfig_SerialConfig_Serial_Mode_MS_CONFIG)) {
@@ -159,6 +168,9 @@ int32_t SerialModule::runOnce()
     if (!moduleConfig.serial.enabled)
         return disable();
 
+    if (firstTime && !serialConfigIsValid(moduleConfig.serial))
+        return disable();
+
     if (moduleConfig.serial.override_console_serial_port || (moduleConfig.serial.rxd && moduleConfig.serial.txd)) {
         if (firstTime) {
             // Interface with the serial peripheral from in here.
@@ -200,8 +212,8 @@ int32_t SerialModule::runOnce()
 #elif defined(ARCH_ESP32)
 
             if (moduleConfig.serial.rxd && moduleConfig.serial.txd) {
-                Serial2.setRxBufferSize(RX_BUFFER);
-                Serial2.begin(baud, SERIAL_8N1, moduleConfig.serial.rxd, moduleConfig.serial.txd);
+                SERIAL_PRINT_OBJECT.setRxBufferSize(RX_BUFFER);
+                SERIAL_PRINT_OBJECT.begin(baud, SERIAL_8N1, moduleConfig.serial.rxd, moduleConfig.serial.txd);
             } else {
                 Serial.begin(baud);
                 Serial.setTimeout(moduleConfig.serial.timeout > 0 ? moduleConfig.serial.timeout : TIMEOUT);
@@ -286,7 +298,11 @@ int32_t SerialModule::runOnce()
                     serialPayloadSize = Serial1.readBytes(serialBytes, meshtastic_Constants_DATA_PAYLOAD_LEN);
 #else
 #ifndef RAK3172
+#if defined(ARCH_ESP32)
+                HardwareSerial *serialInstance = &SERIAL_PRINT_OBJECT;
+#else
                 HardwareSerial *serialInstance = &Serial2;
+#endif
 #else
                 HardwareSerial *serialInstance = &Serial1;
 #endif
@@ -559,11 +575,11 @@ void SerialModule::processWXSerial()
     static float rain = 0;
     bool gotwind = false;
 
-    while (Serial2.available()) {
+    while (SERIAL_PRINT_OBJECT.available()) {
         // clear serialBytes buffer
         memset(serialBytes, '\0', sizeof(serialBytes));
         // memset(formattedString, '\0', sizeof(formattedString));
-        serialPayloadSize = Serial2.readBytes(serialBytes, 512);
+        serialPayloadSize = SERIAL_PRINT_OBJECT.readBytes(serialBytes, 512);
         // check for a strings we care about
         // example output of serial data fields from the WS85
         // WindDir      = 79
@@ -641,8 +657,8 @@ void SerialModule::processWXSerial()
             }
             break;
             // clear the input buffer
-            while (Serial2.available() > 0) {
-                Serial2.read(); // Read and discard the bytes in the input buffer
+            while (SERIAL_PRINT_OBJECT.available() > 0) {
+                SERIAL_PRINT_OBJECT.read(); // Read and discard the bytes in the input buffer
             }
         }
     }

@@ -2,10 +2,13 @@
 #define I2C_SDA 21
 #define I2C_SCL 22
 
-// For GPS, 'undef's not needed
+#ifndef MESHTASTIC_UART_BRIDGE
 #define GPS_TX_PIN 15
 #define GPS_RX_PIN 12
 #define PIN_GPS_EN 4
+#else
+#define HAS_GPS 0
+#endif
 
 #define BUTTON_PIN 39 // The middle button GPIO on the T-Beam
 // Note: On the ESP32 base version, gpio34-39 are input-only, and do not have internal pull-ups.
@@ -14,15 +17,21 @@
 #define ADC_CHANNEL ADC_CHANNEL_7
 #define ADC_MULTIPLIER 1.85 // (R1 = 470k, R2 = 680k)
 #define EXT_PWR_DETECT 4    // Pin to detect connected external power source for LILYGO® TTGO T-Energy T18 and other DIY boards
-#define EXT_NOTIFY_OUT 12   // Overridden default pin to use for Ext Notify Module (#975).
-#define LED_POWER 2         // add status LED (compatible with core-pcb and DIY targets)
+#ifdef MESHTASTIC_UART_BRIDGE
+#define EXT_NOTIFY_OUT 26 // MeshAdventurer buzzer transistor
+#else
+#define EXT_NOTIFY_OUT 12 // Overridden default pin to use for Ext Notify Module (#975).
+#endif
+#define LED_POWER 2 // add status LED (compatible with core-pcb and DIY targets)
 
 // Radio
 #define USE_SX1262 // E22-900M30S uses SX1262
 #define USE_SX1268 // E22-400M30S uses SX1268
 #define SX126X_MAX_POWER                                                                                                         \
     22 // Outputting 22dBm from SX1262 results in ~30dBm E22-900M30S output (module only uses last stage of the YP2233W PA)
-#define SX126X_DIO3_TCXO_VOLTAGE 1.8 // E22 series TCXO reference voltage is 1.8V
+#ifndef SX126X_DIO3_TCXO_VOLTAGE
+#define SX126X_DIO3_TCXO_VOLTAGE 1.8
+#endif
 
 #define SX126X_CS 18    // EBYTE module's NSS pin
 #define SX126X_SCK 5    // EBYTE module's SCK pin

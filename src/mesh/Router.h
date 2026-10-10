@@ -55,6 +55,10 @@ class Router : protected concurrency::OSThread, protected PacketHistory
      *
      */
     Router();
+#ifdef MESHTASTIC_UART_BRIDGE
+    void receiveFromBridge(meshtastic_MeshPacket *p);
+    bool isBridgeIngress(const meshtastic_MeshPacket *p) const { return bridgeIngress == p; }
+#endif
 
     /**
      * Currently we only allow one interface, that may change in the future
@@ -184,6 +188,10 @@ class Router : protected concurrency::OSThread, protected PacketHistory
                     bool ackWantsAck = false, const meshtastic_MeshPacket *relaySource = nullptr);
 
   private:
+#ifdef MESHTASTIC_UART_BRIDGE
+    const meshtastic_MeshPacket *bridgeIngress = nullptr;
+    void forwardBridgeIngress(const meshtastic_MeshPacket *p);
+#endif
     /**
      * Called from loop()
      * Handle any packet that is received by an interface on this node.
@@ -272,7 +280,7 @@ enum class RoutingAuthVerdict { ACCEPT, OPAQUE_RELAY_ONLY, REJECT };
  *
  * @return true for success, false for corrupt packet.
  */
-DecodeState perhapsDecode(meshtastic_MeshPacket *p);
+DecodeState perhapsDecode(meshtastic_MeshPacket *p, bool *wireWantResponse = nullptr);
 
 /** Apply receive authentication before routing state mutation; unknown-channel packets may remain opaque relay-only. */
 RoutingAuthVerdict passesRoutingAuthGate(meshtastic_MeshPacket *p);
@@ -285,7 +293,7 @@ void resetAdminKeyFallbackBudget();
 
 /** Return 0 for success or a Routing_Error code for failure
  */
-meshtastic_Routing_Error perhapsEncode(meshtastic_MeshPacket *p);
+meshtastic_Routing_Error perhapsEncode(meshtastic_MeshPacket *p, meshtastic_Data *encodedData = nullptr);
 
 #if !(MESHTASTIC_EXCLUDE_PKI) && !(MESHTASTIC_EXCLUDE_XEDDSA)
 /** Enforce the configured XEdDSA receive policy. The caller must hold cryptLock.

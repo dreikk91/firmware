@@ -132,6 +132,11 @@ bool TraceRouteModule::handleReceivedProtobuf(const meshtastic_MeshPacket &mp, m
 
 void TraceRouteModule::alterReceivedProtobuf(meshtastic_MeshPacket &p, meshtastic_RouteDiscovery *r)
 {
+#ifdef UART_BRIDGE_FULL
+    // The ingress gateway already recorded this bridge hop.
+    if (router->isBridgeIngress(&p) && !isToUs(&p))
+        return;
+#endif
     const meshtastic_Data &incoming = p.decoded;
 
     // Update next-hops using returned route
