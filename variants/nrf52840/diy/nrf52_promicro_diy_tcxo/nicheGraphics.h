@@ -58,9 +58,15 @@ void setupNicheGraphics()
     inkhud->setDisplayResilience(INKHUD_BUILDCONF_DISPLAYRESILIENCE); // Suggest roughly ten
 
     // Select fonts
+#ifdef UART_BRIDGE_INKHUD_CYRILLIC
+    InkHUD::Applet::fontLarge = FREESANS_12PT_WIN1251;
+    InkHUD::Applet::fontMedium = FREESANS_9PT_WIN1251;
+    InkHUD::Applet::fontSmall = FREESANS_6PT_WIN1251;
+#else
     InkHUD::Applet::fontLarge = FREESANS_12PT_WIN1252;
     InkHUD::Applet::fontMedium = FREESANS_9PT_WIN1252;
     InkHUD::Applet::fontSmall = FREESANS_6PT_WIN1252;
+#endif
 
     // Init settings, and customize defaults
     // Values ignored individually if found saved to flash

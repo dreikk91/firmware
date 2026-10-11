@@ -546,7 +546,7 @@ class Screen : public concurrency::OSThread
         }
 
         // We want to strip out prefix chars for two-byte char formats
-        if (ch == 0xC2 || ch == 0xC3 || ch == 0x82 || ch == 0xD0 || ch == 0xD1)
+        if (ch == 0xC2 || ch == 0xC3 || ch == 0x82 || ch == 0xD0 || ch == 0xD1 || ch == 0xD2)
             return (uint8_t)0;
 
 #endif

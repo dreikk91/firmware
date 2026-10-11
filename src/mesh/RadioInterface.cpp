@@ -39,6 +39,16 @@
 #include "STM32WLE5JCInterface.h"
 #endif
 
+static uint8_t getTxPowerLimit(const RegionInfo *region)
+{
+#if defined(ARCH_ESP32) && defined(MESHTASTIC_UART_BRIDGE) && defined(UART_BRIDGE_EU433_MAX_POWER)
+    static_assert(UART_BRIDGE_EU433_MAX_POWER >= 10 && UART_BRIDGE_EU433_MAX_POWER <= 22);
+    if (region->code == meshtastic_Config_LoRaConfig_RegionCode_EU_433)
+        return UART_BRIDGE_EU433_MAX_POWER;
+#endif
+    return region->powerLimit;
+}
+
 static const meshtastic_Config_LoRaConfig_ModemPreset PRESETS_STD[] = {
     PRESET(LONG_FAST),     PRESET(LONG_SLOW),   PRESET(MEDIUM_SLOW), PRESET(MEDIUM_FAST),  PRESET(SHORT_SLOW), PRESET(SHORT_FAST),
     PRESET(LONG_MODERATE), PRESET(SHORT_TURBO), PRESET(LONG_TURBO),  PRESET(MEDIUM_TURBO), MODEM_PRESET_END};
@@ -1328,8 +1338,10 @@ void RadioInterface::applyModemConfig()
 
     power = loraConfig.tx_power;
 
-    if ((power == 0) || ((power > newRegion->powerLimit) && !devicestate.owner.is_licensed))
+    if (power == 0)
         power = newRegion->powerLimit;
+    else if ((power > getTxPowerLimit(newRegion)) && !devicestate.owner.is_licensed)
+        power = getTxPowerLimit(newRegion);
 
     if (power == 0)
         power = 17; // Default to this power level if we don't have a valid regional power limit (powerLimit of newRegion defaults
@@ -1448,8 +1460,8 @@ void RadioInterface::limitPower(int8_t loraMaxPower)
     power = config.lora.tx_power; // applyModemConfig() writes the resolved value back here
     uint8_t maxPower = 255;       // No limit
 
-    if (myRegion->powerLimit)
-        maxPower = myRegion->powerLimit;
+    if (getTxPowerLimit(myRegion))
+        maxPower = getTxPowerLimit(myRegion);
 
     if ((power > maxPower) && !devicestate.owner.is_licensed) {
         LOG_INFO("Lower Tx power: regulatory limits");
